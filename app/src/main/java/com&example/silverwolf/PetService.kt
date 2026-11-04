@@ -1,94 +1,201 @@
 package com.example.silverwolf
 
-import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import android.content.pm.ServiceInfo
+import android.graphics.Color
+import android.graphics.PixelFormat
 import android.os.Build
-import android.os.Bundle
-import android.provider.Settings
-import android.view.Gravity
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
-import android.widget.Toast
-import androidx.core.content.ContextCompat
+import android.os.IBinder
+import android.view.*
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.widget.FrameLayout
+import android.widget.ImageView
+import androidx.core.app.NotificationCompat
+import kotlin.math.abs
 
-class MainActivity : Activity() {
+class PetService : Service() {
 
-    private var pendingStart = false
+    private lateinit var wm: WindowManager
+    private lateinit var root: DraggableFrame
+    private var webView: WebView? = null
+    private var params: WindowManager.LayoutParams? = null
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    private val W_NORMAL = 200
+    private val H_NORMAL = 300
+    private val W_MINI = 72
+    private val H_MINI = 72
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(60, 240, 60, 60)
-        }
-
-        val title = TextView(this).apply {
-            text = "🎮 银狼桌宠"
-            textSize = 24f
-            gravity = Gravity.CENTER
-        }
-        val tip = TextView(this).apply {
-            text = "\n1. 点击「启动」，首次会要求「显示在其他应用上层」权限\n" +
-                   "2. 授权后银狼自动出现\n" +
-                   "3. 长按银狼可缩小，再长按恢复\n" +
-                   "4. 单击说话，双击放信号波\n"
-            textSize = 15f
-            gravity = Gravity.CENTER
-        }
-
-        val btnStart = Button(this).apply {
-            text = "启动银狼"
-            setOnClickListener { ensurePermissionThenStart() }
-        }
-        val btnStop = Button(this).apply {
-            text = "关闭桌宠"
-            setOnClickListener {
-                stopService(Intent(this@MainActivity, PetService::class.java))
-                Toast.makeText(this@MainActivity, "已关闭", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        root.addView(title)
-        root.addView(tip)
-        root.addView(btnStart)
-        root.addView(btnStop)
-        setContentView(root)
-
-        if (Build.VERSION.SDK_INT >= 33) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
-        }
+    override fun onCreate() {
+        super.onCreate()
+        wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        startForegroundNotice()
+        addOverlay()
     }
 
-    private fun ensurePermissionThenStart() {
-        if (!Settings.canDrawOverlays(this)) {
-            pendingStart = true
-            startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-            )
-        } else {
-            startPet()
-        }
-    }
-
-    private fun startPet() {
-        ContextCompat.startForegroundService(
-            this, Intent(this, PetService::class.java)
+    private fun startForegroundNotice() {
+        val ch = NotificationChannel(
+            "pet", "桌宠运行中", NotificationManager.IMPORTANCE_LOW
         )
-        Toast.makeText(this, "银狼已上线～", Toast.LENGTH_SHORT).show()
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+            .createNotificationChannel(ch)
+
+        val n = NotificationCompat.Builder(this, "pet")
+            .setContentTitle("银狼正在挂机")
+            .setContentText("下拉通知可关闭")
+            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setOngoing(true)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(1, n)
+        }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (pendingStart && Settings.canDrawOverlays(this)) {
-            pendingStart = false
-            startPet()
+    private fun addOverlay() {
+        root = DraggableFrame(this)
+
+        webView = WebView(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            addJavascriptInterface(Bridge(), "AndroidPet")
+        }
+        webView?.loadUrl("file:///android_asset/pet.html")
+
+        root.addView(webView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+
+        val close = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            alpha = 0.3f
+            setOnClickListener { stopSelf() }
+        }
+        val c = dp(22)
+        root.addView(close, FrameLayout.LayoutParams(c, c).apply {
+            gravity = Gravity.TOP or Gravity.END
+            topMargin = dp(2); rightMargin = dp(2)
+        })
+
+        params = WindowManager.LayoutParams(
+            dp(W_NORMAL), dp(H_NORMAL),
+            if (Build.VERSION.SDK_INT >= 26)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 300
+            y = 500
+        }
+
+        wm.addView(root, params)
+    }
+
+    private inner class Bridge {
+        @JavascriptInterface
+        fun minimize() = root.post { setWindowSize(W_MINI, H_MINI) }
+
+        @JavascriptInterface
+        fun restore() = root.post { setWindowSize(W_NORMAL, H_NORMAL) }
+
+        @JavascriptInterface
+        fun close() = root.post { stopSelf() }
+    }
+
+    private fun setWindowSize(wDp: Int, hDp: Int) {
+        val p = params ?: return
+        p.width = dp(wDp)
+        p.height = dp(hDp)
+        val dm = resources.displayMetrics
+        p.x = p.x.coerceIn(0, (dm.widthPixels - p.width).coerceAtLeast(0))
+        p.y = p.y.coerceIn(0, (dm.heightPixels - p.height).coerceAtLeast(0))
+        runCatching { wm.updateViewLayout(root, p) }
+    }
+
+    private fun dp(v: Int): Int =
+        (v * resources.displayMetrics.density).toInt()
+
+    override fun onDestroy() {
+        webView?.let { w ->
+            w.stopLoading()
+            w.removeJavascriptInterface("AndroidPet")
+            w.destroy()
+        }
+        webView = null
+        if (::root.isInitialized) runCatching { wm.removeView(root) }
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    inner class DraggableFrame(context: Context) : FrameLayout(context) {
+
+        private var startX = 0f
+        private var startY = 0f
+        private var originX = 0
+        private var originY = 0
+        private var dragging = false
+        private val slop = ViewConfiguration.get(context).scaledTouchSlop
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = ev.rawX; startY = ev.rawY
+                    originX = params?.x ?: 0
+                    originY = params?.y ?: 0
+                    dragging = false
+                    return false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!dragging &&
+                        (abs(ev.rawX - startX) > slop || abs(ev.rawY - startY) > slop)
+                    ) {
+                        dragging = true
+                        webView?.evaluateJavascript(
+                            "window.__dragBegin&&window.__dragBegin()", null
+                        )
+                        return true
+                    }
+                }
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> dragging = false
+            }
+            return dragging
+        }
+
+        override fun onTouchEvent(ev: MotionEvent): Boolean {
+            if (!dragging) return super.onTouchEvent(ev)
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_MOVE -> {
+                    val p = params ?: return true
+                    p.x = originX + (ev.rawX - startX).toInt()
+                    p.y = originY + (ev.rawY - startY).toInt()
+                    runCatching { wm.updateViewLayout(this, p) }
+                }
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    dragging = false
+                    webView?.evaluateJavascript(
+                        "window.__dragEnd&&window.__dragEnd()", null
+                    )
+                }
+            }
+            return true
         }
     }
 }
