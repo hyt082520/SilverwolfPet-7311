@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>银狼</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:transparent;}
+  body{
+    position:fixed;inset:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    user-select:none;-webkit-user-select:none;
+    touch-action:none;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    padding-bottom:46px;
+  }
+
+  #pet{
+    width:66vw;max-width:150px;
+    position:relative;z-index:25;
+    transition:transform .3s,opacity .3s;
+  }
+  .pet-inner{animation:floaty 3.6s ease-in-out infinite;transform-origin:50% 100%;}
+  @keyframes floaty{
+    0%,100%{transform:translateY(0) rotate(-1deg)}
+    50%{transform:translateY(-7px) rotate(1deg)}
+  }
+  .pet-body{transform-origin:50% 100%;}
+  .pet-body.hop{animation:hop .5s cubic-bezier(.28,.9,.4,1);}
+  @keyframes hop{
+    0%{transform:translateY(0) scale(1,1)}
+    28%{transform:translateY(6px) scale(1.07,.91)}
+    62%{transform:translateY(-14px) scale(.93,1.09)}
+    100%{transform:translateY(0) scale(1,1)}
+  }
+  svg{display:block;width:100%;height:auto;overflow:visible;}
+
+  .eye-g{transform-box:fill-box;transform-origin:center;animation:blink 4.8s infinite;}
+  @keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.08)}}
+  #pet.sleepy .eye-g{animation:none;transform:scaleY(.08);}
+
+  .hair-l{transform-box:fill-box;transform-origin:84% 5%;animation:swayL 3.6s ease-in-out infinite;}
+  .hair-r{transform-box:fill-box;transform-origin:16% 5%;animation:swayR 3.6s ease-in-out infinite;}
+  @keyframes swayL{0%,100%{transform:rotate(0)}50%{transform:rotate(1.8deg)}}
+  @keyframes swayR{0%,100%{transform:rotate(0)}50%{transform:rotate(-1.8deg)}}
+
+  .ahoge{transform-box:fill-box;transform-origin:50% 100%;animation:ahoge 2.4s ease-in-out infinite;}
+  @keyframes ahoge{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+
+  .led{animation:led 2.2s ease-in-out infinite;}
+  @keyframes led{0%,100%{opacity:.45}50%{opacity:1}}
+
+  .signal{opacity:0;transform-box:fill-box;transform-origin:50% 50%;}
+  .signal.on{animation:signalPulse .9s ease-out;}
+  @keyframes signalPulse{
+    0%{opacity:0;transform:scale(.4)}
+    28%{opacity:1;transform:scale(1.05)}
+    100%{opacity:0;transform:scale(1.9)}
+  }
+
+  .shadow{
+    position:absolute;left:50%;bottom:-4px;transform:translateX(-50%);
+    width:56%;height:9px;border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(40,10,60,.45), transparent 72%);
+    animation:shadowPulse 3.6s ease-in-out infinite;
+  }
+  @keyframes shadowPulse{
+    0%,100%{transform:translateX(-50%) scale(1);opacity:.85}
+    50%{transform:translateX(-50%) scale(.88);opacity:.5}
+  }
+
+  .bubble{
+    position:fixed;left:50%;top:6px;
+    transform:translateX(-50%) scale(.9);
+    background:#fff;color:#3b2352;
+    padding:6px 11px;border-radius:13px;
+    font-size:11.5px;line-height:1.45;font-weight:600;
+    max-width:180px;text-align:center;
+    border:1px solid rgba(168,85,247,.25);
+    box-shadow:0 6px 18px rgba(60,20,90,.28);
+    opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;
+    z-index:40;
+  }
+  .bubble.show{opacity:1;transform:translateX(-50%) scale(1);}
+  .bubble::after{
+    content:'';position:absolute;left:50%;top:100%;
+    transform:translateX(-50%);
+    border:6px solid transparent;border-top-color:#fff;
+  }
+
+  .hud{
+    position:absolute;left:0;right:0;bottom:6px;
+    display:flex;justify-content:center;gap:6px;
+    padding:0 8px;z-index:30;
+  }
+  .hud-btn{
+    flex:1;max-width:58px;
+    display:flex;flex-direction:column;align-items:center;gap:1px;
+    padding:5px 2px;border-radius:12px;border:none;
+    background:rgba(168,85,247,.18);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    border:1px solid rgba(192,132,252,.38);
+    color:#f3e8ff;font-size:9.5px;font-weight:700;font-family:inherit;
+    transition:transform .12s,background .12s;
+  }
+  .hud-btn span{font-size:14px;line-height:1.15;}
+  .hud-btn:active{transform:scale(.93);background:rgba(168,85,247,.38);}
+
+  body.mini #pet{
+    width:84vw;max-width:none;
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+    margin:0;
+  }
+  body.mini .bubble,
+  body.mini .hud{display:none !important;}
+  body.mini{padding-bottom:0;justify-content:center;}
+
+  body.dragging #pet{pointer-events:none;}
+
+  .pt{
+    position:fixed;font-size:13px;pointer-events:none;z-index:60;
+    animation:ptfly 1.1s ease-out forwards;
+  }
+  @keyframes ptfly{
+    0%{transform:translate(0,0) scale(.5);opacity:0}
+    18%{opacity:1}
+    100%{transform:translate(var(--dx),var(--dy)) scale(1.1);opacity:0}
+  }
+</style>
+</head>
+<body>
+
+<div class="bubble" id="bubble"></div>
+
+<div id="pet">
+  <div class="pet-inner">
+    <div class="pet-body" id="petBody">
+      <svg viewBox="0 0 260 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hairG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0"   stop-color="#f2f2fa"/>
+            <stop offset=".42" stop-color="#d4d4e6"/>
+            <stop offset=".78" stop-color="#9b6ee0"/>
+            <stop offset="1"   stop-color="#5b2d99"/>
+          </linearGradient>
+          <linearGradient id="hairBack" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0"   stop-color="#dcdcea"/>
+            <stop offset=".55" stop-color="#adadc8"/>
+            <stop offset="1"   stop-color="#7b4fa8"/>
+          </linearGradient>
+          <linearGradient id="skinG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff3ef"/>
+            <stop offset="1" stop-color="#ffd9d0"/>
+          </linearGradient>
+          <linearGradient id="coatG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#3a3a4a"/>
+            <stop offset="1" stop-color="#1b1b25"/>
+          </linearGradient>
+          <linearGradient id="innerG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8b5cf6"/>
+            <stop offset="1" stop-color="#54249b"/>
+          </linearGradient>
+          <linearGradient id="eyeG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f27ade"/>
+            <stop offset="1" stop-color="#9c2b93"/>
+          </linearGradient>
+        </defs>
+
+        <ellipse cx="130" cy="148" rx="80" ry="86" fill="url(#hairBack)"/>
+
+        <path class="hair-l" d="M66 126 C48 180 46 242 50 302 C72 310 92 302 96 282 C104 242 104 180 104 148 Z" fill="url(#hairG)"/>
+        <path class="hair-r" d="M194 126 C212 180 214 242 210 302 C188 310 168 302 164 282 C156 242 156 180 156 148 Z" fill="url(#hairG)"/>
+        <path class="hair-l" d="M62 240 C58 262 57 284 58 300" stroke="#c084fc" stroke-width="2.2" fill="none" opacity=".55" stroke-linecap="round"/>
+        <path class="hair-r" d="M198 240 C202 262 203 284 202 300" stroke="#c084fc" stroke-width="2.2" fill="none" opacity=".55" stroke-linecap="round"/>
+
+        <path d="M96 206 Q130 197 164 206 L172 282 Q130 300 88 282 Z" fill="url(#coatG)"/>
+        <path d="M114 210 Q130 219 146 210 L150 266 Q130 277 110 266 Z" fill="url(#innerG)"/>
+        <path d="M99 214 Q95 246 93 276" stroke="#a855f7" stroke-width="2.4" fill="none" opacity=".85" stroke-linecap="round"/>
+        <path d="M161 214 Q165 246 167 276" stroke="#a855f7" stroke-width="2.4" fill="none" opacity=".85" stroke-linecap="round"/>
+
+        <path d="M100 216 Q82 238 86 258" stroke="url(#coatG)" stroke-width="14" fill="none" stroke-linecap="round"/>
+        <path d="M160 216 Q178 238 174 258" stroke="url(#coatG)" stroke-width="14" fill="none" stroke-linecap="round"/>
+        <circle cx="86"  cy="260" r="7" fill="url(#skinG)"/>
+        <circle cx="174" cy="260" r="7" fill="url(#skinG)"/>
+
+        <rect x="121" y="192" width="18" height="20" rx="6" fill="url(#skinG)"/>
+
+        <path d="M100 208 Q130 230 160 208" stroke="#2b2b38" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <ellipse cx="98"  cy="211" rx="12" ry="10" fill="#2b2b38" transform="rotate(-16 98 211)"/>
+        <ellipse cx="98"  cy="211" rx="6"  ry="5"  fill="#a855f7" class="led" transform="rotate(-16 98 211)"/>
+        <ellipse cx="162" cy="211" rx="12" ry="10" fill="#2b2b38" transform="rotate(16 162 211)"/>
+        <ellipse cx="162" cy="211" rx="6"  ry="5"  fill="#a855f7" class="led" transform="rotate(16 162 211)"/>
+
+        <ellipse cx="130" cy="146" rx="56" ry="52" fill="url(#skinG)"/>
+
+        <ellipse cx="90"  cy="164" rx="12" ry="7" fill="#ff9fa8" opacity=".32"/>
+        <ellipse cx="170" cy="164" rx="12" ry="7" fill="#ff9fa8" opacity=".32"/>
+
+        <g class="eye-g">
+          <ellipse cx="107" cy="150" rx="10.5" ry="12" fill="url(#eyeG)"/>
+          <circle cx="103" cy="145" r="3.8" fill="#fff"/>
+          <circle cx="111" cy="155" r="2.2" fill="#ffd6f5"/>
+          <path d="M96 143 Q107 136 118 143" stroke="#4a2a52" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        </g>
+        <g class="eye-g">
+          <ellipse cx="153" cy="150" rx="10.5" ry="12" fill="url(#eyeG)"/>
+          <circle cx="149" cy="145" r="3.8" fill="#fff"/>
+          <circle cx="157" cy="155" r="2.2" fill="#ffd6f5"/>
+          <path d="M142 143 Q153 136 164 143" stroke="#4a2a52" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        </g>
+
+        <path d="M98 128 q10 -5 19 0" stroke="#bcbcd2" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+        <path d="M143 128 q9 -5 19 0" stroke="#bcbcd2" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+
+        <path d="M125 170 q5 4 10 0" stroke="#c06070" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+
+        <path d="M72 128 C74 92 100 70 130 70 C160 70 186 92 188 128 C180 108 166 100 154 104 C146 90 136 86 130 90 C124 86 114 90 106 104 C94 100 80 108 72 128 Z" fill="url(#hairG)"/>
+        <path d="M100 108 C96 126 99 142 106 152" stroke="#f8f8ff" stroke-width="3" fill="none" opacity=".7" stroke-linecap="round"/>
+        <path d="M160 108 C164 126 161 142 154 152" stroke="#f8f8ff" stroke-width="3" fill="none" opacity=".7" stroke-linecap="round"/>
+        <path d="M130 92 C128 108 128 122 130 134" stroke="#f8f8ff" stroke-width="2.6" fill="none" opacity=".55" stroke-linecap="round"/>
+
+        <g class="ahoge">
+          <path d="M130 72 C119 61 117 44 128 27 C139 44 141 61 130 72 Z" fill="url(#hairG)"/>
+          <path d="M130 66 C126 56 127 46 130 35" stroke="#f8f8ff" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".78"/>
+        </g>
+
+        <g class="signal" id="signal">
+          <circle cx="130" cy="34" r="9"  fill="none" stroke="#a855f7" stroke-width="3"/>
+          <circle cx="130" cy="34" r="17" fill="none" stroke="#c084fc" stroke-width="2.5"/>
+          <circle cx="130" cy="34" r="25" fill="none" stroke="#e9d5ff" stroke-width="2"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <div class="shadow"></div>
+</div>
+
+<div class="hud">
+  <button class="hud-btn" data-act="feed"><span>🥤</span>投喂</button>
+  <button class="hud-btn" data-act="pet"><span>👋</span>摸摸</button>
+  <button class="hud-btn" data-act="play"><span>🎮</span>联机</button>
+</div>
+
+<script>
+(() => {
+  const pet     = document.getElementById('pet');
+  const petBody = document.getElementById('petBody');
+  const bubble  = document.getElementById('bubble');
+  const signalEl= document.getElementById('signal');
+
+  let tapTimer = null;
+  let sleepTimer = null;
+  let sayTimer = null;
+  let pressTimer = null;
+  let suppressClick = false;
+  let isMini = false;
+
+  const LINES = {
+    tap:  ['啧，又戳我…','干嘛？这局还没打完','嗯？想被我黑进手机吗','别闹，困着呢…',
+           '你这手速，练过？','再戳我可要收费了','…好吧，陪你一会儿','系统提示：请勿反复戳弄'],
+    feed: ['…能量饮料，谢了','还行，勉强能喝','嗯，补给到了','这种口味…再来一罐'],
+    full: ['够了，撑死了','再喂就要宕机了…'],
+    pet:  ['…别摸头发，会乱','唔…就一会儿','手倒是挺暖的','…咳，可以了'],
+    play: ['联机？行吧，带你一把','这关我闭眼都能过','看好了，这才是操作','信号满格，开打'],
+    mini: ['我去挂机了…','先缩一会儿，别吵','…充电中'],
+    back: ['回来了，继续','充好电了，说吧'],
+    idle: ['…（盯着屏幕发呆）','这系统漏洞也太多了','无聊…有游戏吗','你怎么还不去睡觉']
+  };
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+
+  function say(t, ms = 2200){
+    if (isMini) return;
+    bubble.textContent = t;
+    bubble.classList.add('show');
+    clearTimeout(sayTimer);
+    sayTimer = setTimeout(() => bubble.classList.remove('show'), ms);
+  }
+
+  function hop(){
+    petBody.classList.remove('hop');
+    void petBody.offsetWidth;
+    petBody.classList.add('hop');
+  }
+  petBody.addEventListener('animationend', e => {
+    if (e.animationName === 'hop') petBody.classList.remove('hop');
+  });
+
+  function signal(){
+    signalEl.classList.remove('on');
+    void signalEl.getBoundingClientRect();
+    signalEl.classList.add('on');
+    setTimeout(() => signalEl.classList.remove('on'), 1000);
+  }
+
+  function spawnParticles(type, n){
+    const r = pet.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height * 0.30;
+    for (let i = 0; i < n; i++){
+      const el = document.createElement('div');
+      el.className = 'pt';
+      el.textContent = type === 'heart' ? '💜' : '✦';
+      el.style.left = (cx - 8 + (Math.random() - .5) * 60) + 'px';
+      el.style.top  = (cy - 8) + 'px';
+      el.style.setProperty('--dx', (Math.random() - .5) * 110 + 'px');
+      el.style.setProperty('--dy', -(50 + Math.random() * 70) + 'px');
+      el.style.animationDelay = (Math.random() * .1) + 's';
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 1300);
+    }
+  }
+
+  function resetSleep(){
+    pet.classList.remove('sleepy');
+    clearTimeout(sleepTimer);
+    sleepTimer = setTimeout(() => {
+      pet.classList.add('sleepy');
+      say('……Zzz', 2600);
+    }, 30000);
+  }
+
+  function toggleMini(){
+    isMini = !isMini;
+    document.body.classList.toggle('mini', isMini);
+    if (isMini){
+      clearTimeout(sayTimer);
+      bubble.classList.remove('show');
+      if (window.AndroidPet) window.AndroidPet.minimize();
+    } else {
+      if (window.AndroidPet) window.AndroidPet.restore();
+      setTimeout(() => say(pick(LINES.back), 2200), 320);
+    }
+  }
+
+  function onTap(){
+    if (suppressClick){ suppressClick = false; return; }
+
+    if (tapTimer){
+      clearTimeout(tapTimer); tapTimer = null;
+      signal();
+      say('信号波：啪！');
+      resetSleep();
+      return;
+    }
+    tapTimer = setTimeout(() => {
+      tapTimer = null;
+      hop();
+      say(pick(LINES.tap));
+      spawnParticles('heart', 4);
+      if (Math.random() < .35) signal();
+      resetSleep();
+    }, 240);
+  }
+
+  function feed(){
+    resetSleep();
+    say(pick(LINES.feed));
+    hop();
+    spawnParticles('heart', 3);
+  }
+  function petHead(){
+    resetSleep();
+    say(pick(LINES.pet));
+    hop();
+    spawnParticles('heart', 5);
+  }
+  function play(){
+    resetSleep();
+    say(pick(LINES.play));
+    signal();
+    hop();
+    spawnParticles('star', 6);
+  }
+
+  document.querySelector('.hud').addEventListener('click', e => {
+    const btn = e.target.closest('.hud-btn');
+    if (!btn || isMini) return;
+    const act = btn.dataset.act;
+    if (act === 'feed') feed();
+    else if (act === 'pet') petHead();
+    else if (act === 'play') play();
+  });
+
+  function clearPress(){
+    if (pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+  }
+  pet.addEventListener('pointerdown', () => {
+    clearPress();
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      suppressClick = true;
+      toggleMini();
+    }, 700);
+  });
+  pet.addEventListener('pointerup', clearPress);
+  pet.addEventListener('pointercancel', clearPress);
+  pet.addEventListener('pointerleave', clearPress);
+
+  window.__dragBegin = function(){
+    document.body.classList.add('dragging');
+    clearPress();
+    suppressClick = true;
+  };
+  window.__dragEnd = function(){
+    document.body.classList.remove('dragging');
+    setTimeout(() => suppressClick = false, 60);
+  };
+
+  resetSleep();
+  setTimeout(() => say('……嗯？叫我干嘛。长按可以缩起来', 3000), 500);
+
+  setInterval(() => {
+    if (isMini || document.hidden) return;
+    if (Math.random() < .5) say(pick(LINES.idle), 2600);
+  }, 17000);
+})();
+</script>
+</body>
+</html>
